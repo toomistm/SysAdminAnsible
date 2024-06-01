@@ -1,0 +1,121 @@
+---
+- name: DNS | Autoremove unneeded packages installed as dependencies
+  dnf:
+    autoremove: yes
+
+- name: Disable IPv6
+  copy:
+    src: 70-ipv6.conf
+    dest: /etc/sysctl.d/70-ipv6.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Change net.ipv6.conf.default.disable_ipv6 to 1.
+  sysctl:
+    name: net.ipv6.conf.default.disable_ipv6
+    value: '1'
+    sysctl_file: /etc/sysctl.d/70-ipv6.conf
+    reload: yes
+
+- name: Change net.ipv6.conf.all.disable_ipv6 to 1.
+  sysctl:
+    name: net.ipv6.conf.all.disable_ipv6
+    value: '1'
+    sysctl_file: /etc/sysctl.d/70-ipv6.conf
+    reload: yes
+
+- name: Inserts into hostname
+  template:
+    src: hostname.j2
+    dest: /etc/hostname
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Inserts into hosts
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install bind and bind-utils
+  ansible.builtin.dnf:
+    name:
+      - bind
+      - bind-utils
+    state: latest
+
+- name: Create log directory
+  copy:
+    src: log
+    dest: /var/named
+    owner: named
+    group: named
+    mode: '0740'
+
+- name: Change the owner and group of log dir recursively
+  file:
+    path: /var/named
+    recurse: yes
+    owner: named
+    group: named
+
+- name: Change the permissions of previous files
+  file:
+    path: /var/named/log
+    recurse: yes
+    mode: '0740'
+
+- name: Replace the default logging options in named.conf
+  copy:
+    src: named.conf
+    dest: /etc/named.conf
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Enable auto-starting the named daeomon on boot
+  systemd:
+    name: named
+    enabled: yes
+
+- name: Edit resolv.conf file to use local DNS server for all queries
+  template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+
+- name: Create hostname.domain_name file in /etc/named dir
+  template:
+    src: zoneFile.j2
+    dest: /etc/named/{{ hostname }}.{{ domain_name }}
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Add the defined zone into the Bind configuration
+  template:
+    src: named2.conf.j2
+    dest: /etc/named.conf
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Restart named service
+  systemd:
+    name: named
+    state: restarted
+
+- name: Add reverse zone file
+  template:
+    src: reverseZoneFile.j2
+    dest: /etc/named/{{ ipv43 }}.{{ ipv42 }}.{{ ipv41 }}.in-addr.arpa
+
+- name: Restart named service
+  systemd:
+    name: named
+    state: restarted

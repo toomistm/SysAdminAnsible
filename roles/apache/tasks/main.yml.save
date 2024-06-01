@@ -1,0 +1,42 @@
+---
+- name: Create CNAME record for www inside /et/named/<vm>.sa.cs.ut.ee zonefile.
+  template:
+    src: zoneFile.j2
+    dest: /etc/named/{{ hostname }}.{{ domain_name }}
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: install  Apache Web Server
+  ansible.builtin.dnf:
+    name:
+      - httpd
+    state: latest
+
+- name: add http service to firewall
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+
+- name: Enable auto-starting the http daeomon on boot
+  systemd:
+    name: httpd
+    state: started
+
+- name: Create www.<vm_name> directory in /var/www/html
+  ansible.builtin.file:
+    path: /var/www/html/www.{{ hostname }}
+    state: directory
+
+- name: Create public_html directory in /var/www/html/www.<vm_name>
+  ansible.builtin.file:
+    path: /var/www/html/www.{{ hostname }}/public_html
+    state: directory
+
+- name: Create conf file for said virtual host
+  template:
+    src: www.vm_name.conf
+    dest: /etc/httpd/conf.d/www.{{ hostname }}.conf
+
+

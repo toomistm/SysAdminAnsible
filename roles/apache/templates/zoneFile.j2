@@ -1,0 +1,18 @@
+;
+; BIND data file for local zone {{ hostname }}.{{ domain_name }};
+$TTL    15M
+@       IN      SOA     ns1.{{ hostname }}.{{ domain_name }}. root.{{ hostname }}.{{ domain_name }}. (
+                     2012020203         ; Serial
+                            15M         ; Refresh
+                             5M         ; Retry
+                           120M         ; Expire
+                            600 )       ; Negative Cache TTL
+
+
+@              IN      NS      ns1
+@              IN      A       {{ ipv41 }}.{{ ipv42 }}.{{ipv43 }}.{{ ipv44}}
+ns1            IN      A       {{ ipv41 }}.{{ ipv42 }}.{{ipv43 }}.{{ ipv44}}
+{{ hostname }}       IN      A       {{ ipv41 }}.{{ ipv42 }}.{{ipv43 }}.{{ ipv44}}
+; CNAME records
+www		IN	CNAME	{{ hostname }}.{{ domain_name }}.
+

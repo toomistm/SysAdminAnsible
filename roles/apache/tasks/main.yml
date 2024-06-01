@@ -1,0 +1,344 @@
+---
+- name: Create CNAME record for www inside /et/named/<vm>.sa.cs.ut.ee zonefile.
+  template:
+    src: zoneFile.j2
+    dest: /etc/named/{{ hostname }}.{{ domain_name }}
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: install  Apache Web Server
+  ansible.builtin.dnf:
+    name:
+      - httpd
+    state: latest
+
+- name: add http service to firewall
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+
+- name: Enable auto-starting the http daeomon on boot
+  systemd:
+    name: httpd
+    state: started
+
+- name: Create www.<vm_name> directory in /var/www/html
+  ansible.builtin.file:
+    path: /var/www/html/www.{{ hostname }}
+    state: directory
+
+- name: Create public_html directory in /var/www/html/www.<vm_name>
+  ansible.builtin.file:
+    path: /var/www/html/www.{{ hostname }}/public_html
+    state: directory
+
+- name: Create conf file for said virtual host
+  template:
+    src: www.vm_name.conf
+    dest: /etc/httpd/conf.d/www.{{ hostname }}.conf
+
+- name: Create index.html file for webpage
+  template:
+    src: index.html
+    dest: /var/www/html/www.{{ hostname }}/public_html/index.html
+
+- name: install PIP
+  ansible.builtin.dnf:
+    name:
+      - pip
+    state: latest
+
+- name: Install flask python package
+  ansible.builtin.pip:
+    name: flask
+
+
+- name: Set up a domain name for proxy
+  template:
+    src: zoneFile2.j2
+    dest:  /etc/named/{{ hostname }}.{{ domain_name }}
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Allow httpd to connect to the python program
+  ansible.builtin.seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+
+- name: Create proxy.conf configuration file
+  template:
+    src: proxy.conf
+    dest: /etc/httpd/conf.d/proxy.conf
+
+- name: Enable auto-starting the httpd service on boot
+  systemd:
+    name: httpd
+    state: started
+    enabled: yes
+
+- name: Add the user 'proxy'
+  ansible.builtin.user:
+    name: proxy
+    comment: proxy
+
+- name: Create python script file
+  ansible.builtin.copy:
+    src: pythonScript
+    dest: /usr/local/lib/server.py
+    owner: proxy
+
+- name: Create /etc/systemd/system/proxy.service file
+  ansible.builtin.copy:
+    src: proxy.service
+    dest: /etc/systemd/system/proxy.service
+
+- name: Reload systemd manager configuration
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable auto-starting the proxy service on boot
+  systemd:
+    name: proxy
+    state: started
+    enabled: yes
+
+- name: Install packages using dnf
+  ansible.builtin.yum:
+    name:
+      - php-mysqlnd
+      - php-fpm
+      - mariadb-server
+      - httpd
+      - tar
+      - curl
+      - php-json
+    state: present
+
+- name: Enable auto-starting mariadb on boot
+  systemd:
+    name: mariadb
+    state: started
+    enabled: yes
+
+#Tundub vajalik mysql wordpress database loomiseks
+- name: Install PyMySQL
+  ansible.builtin.pip:
+    name: PyMySQL
+    state: present
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+
+- name: Remove anonymous users
+  ansible.builtin.mysql_user:
+    name: ''
+    host_all: true
+    state: absent
+    login_user: root
+    login_password: pass
+
+- name: Disallow root login remotely
+  ansible.builtin.mysql_user:
+    name: root
+    host: 'localhost'
+    priv: '*.*:ALL,GRANT'
+    state: present
+    login_user: root
+    login_password: pass
+  ignore_errors: true
+
+- name: Remove test database
+  ansible.builtin.mysql_db:
+    name: test
+    state: absent
+    login_user: root
+    login_password: pass
+
+- name: Reload privilege tables
+  ansible.builtin.mysql_query:
+    login_user: root
+    login_password: pass
+    query: "FLUSH PRIVILEGES;"
+    login_host: 'localhost'
+
+- name: Create WordPress database
+  ansible.builtin.mysql_db:
+    #login_user: root
+    #login_password: pass
+    name: WordPress
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Create a new database user
+  ansible.builtin.mysql_user:
+    name: admin
+    host: localhost
+    password: pass
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Grant user admin access to WordPress database
+  ansible.builtin.mysql_user:
+    name: admin
+    host: localhost
+    password: pass
+    priv: 'WordPress.*:ALL'
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Reload privilege tables
+  ansible.builtin.mysql_query:
+    login_user: root
+    login_password: pass
+    query: "FLUSH PRIVILEGES;"
+    login_host: 'localhost'
+
+- name: Download wordpress
+  get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /tmp/wordpress.tar.gz
+
+- name: extract wordpress
+  ansible.builtin.unarchive:
+    src: /tmp/wordpress.tar.gz
+    dest: /var/www/html/
+    remote_src: yes
+
+- name: Change wordpress owner and group to apache
+  ansible.builtin.file:
+    path: /var/www/html/wordpress
+    owner: apache
+    group: apache
+    recurse: yes
+
+- name: Sefcontext | this equates to 'chcon -t httpd_sys_rw_content_t /var/www/html/wordpress -R'
+  sefcontext:
+    target: '/var/www/html/wordpress(/.*)?'
+    setype: httpd_sys_rw_content_t
+    state: present
+
+- name: Set error_log in /etc/php-fpm.conf
+  ansible.builtin.lineinfile:
+    path: /etc/php-fpm.conf
+    regexp: '^error_log\s*='
+    line: 'error_log = /var/log/httpd/php-errors.log'
+    state: present
+
+- name: Create new log file /var/log/httpd/php-errors.log
+  ansible.builtin.file:
+    path: /var/log/httpd/php-errors.log
+    state: touch
+    owner: apache
+    group: apache
+
+- name: Set error_log in /etc/php-fpm.d/www.conf
+  ansible.builtin.lineinfile:
+    path: /etc/php-fpm.d/www.conf
+    regexp: '^php_admin_value[error_log] =\s*='
+    line: 'php_admin_value[error_log] = /var/log/httpd/www-php-errors.log'
+    state: present
+
+- name: Create new log file /var/log/httpd/www-php-errors.log
+  ansible.builtin.file:
+    path: /var/log/httpd/www-php-errors.log
+    state: touch
+    owner: apache
+    group: apache
+
+- name: Create a virtual host
+  template:
+    src: wordpress.conf
+    dest: /etc/httpd/conf.d/wordpress.{{ hostname }}.conf
+
+- name: create a CNAME for wordpress.vmname.sa.cs.ut.ee
+  template:
+    src: zoneFile3.j2
+    dest:  /etc/named/{{ hostname }}.{{ domain_name }}
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Apache reload
+  ansible.builtin.service:
+    name: httpd
+    state: reloaded
+
+- name: php-fpm started
+  systemd:
+    name: php-fpm
+    state: started
+    enabled: yes
+
+#- name: php-fpm enambled
+#  systemd:
+#    name: php-fpm
+#    state: enabled
+
+- name: add line LoadModule log_forensic_module modules/mod_log_forensic.so to apache main conf file
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    line: 'LoadModule log_forensic_module modules/mod_log_forensic.so'
+    state: present
+
+- name: restart apache
+  systemd:
+    name: httpd
+    state: restarted
+
+
+- name: Search for ModSecurity package
+  ansible.builtin.command:
+    cmd: dnf search mod_security
+  register: search_result
+
+- name: Debug search result
+  ansible.builtin.debug:
+    var: search_result.stdout_lines
+
+- name: Install ModSecurity package
+  ansible.builtin.yum:
+    name: mod_security
+    state: present
+
+- name: Create local_rules directory if not exists
+  ansible.builtin.file:
+    path: /etc/httpd/modsecurity.d/local_rules
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create placeholder modsecurity_localrules.conf if not exists
+  ansible.builtin.file:
+    path: /etc/httpd/modsecurity.d/local_rules/modsecurity_localrules.conf
+    state: touch
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure ModSecurity local rules
+  ansible.builtin.blockinfile:
+    path: /etc/httpd/modsecurity.d/local_rules/modsecurity_localrules.conf
+    block: |
+      # default action when matching rules
+      SecDefaultAction "phase:2,deny,log,status:406"
+
+      # [etc/passwd] is included in request URI
+      SecRule REQUEST_URI "etc/passwd" "id:'500001'"
+
+      # [../] is included in request URI
+      SecRule REQUEST_URI "\.\./" "id:'500002'"
+
+      # [<SCRIPT] is included in arguments
+      SecRule ARGS "<[Ss][Cc][Rr][Ii][Pp][Tt]" "id:'500003'"
+
+- name: Restart Apache to apply changes
+  ansible.builtin.systemd:
+    name: httpd
+    state: restarted
