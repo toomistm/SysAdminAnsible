@@ -1,0 +1,356 @@
+---
+- name: Add type A record for mail.vmname.sa.cs.ut.ee
+  template:
+    src: zoneFile.j2
+    dest: /etc/named/{{ hostname }}.{{ domain_name }}
+
+- name: restart named
+  systemd: 
+    name: named
+    state: restarted
+
+- name: Download postfix package
+  ansible.builtin.package:
+    name: postfix
+    state: present
+
+- name: Set inet_protocols to ipv4
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_protocols\s*='
+    line: 'inet_protocols = ipv4'
+    state: present
+
+- name: restart postfix
+  systemd:
+    name: postfix
+    state: restarted
+
+#SMTP only uses tcp ports
+- name: permit smtp traffic on port 25
+  ansible.posix.firewalld:
+    port: 25/tcp
+    permanent: true
+    state: enabled
+  become: true
+
+- name: permit smtp traffic on port 465
+  ansible.posix.firewalld:
+    port: 465/tcp
+    permanent: true
+    state: enabled
+  become: true
+
+- name: permit smtp traffic on port 587
+  ansible.posix.firewalld:
+    port: 587/tcp
+    permanent: true
+    state: enabled
+  become: true
+
+- name: add line to main.cf
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    line: 'myhostname = mail.{{  hostname }}.{{ domain_name }}'
+    state: present
+
+- name: inet_interfaces to all
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_interfaces\s*='
+    line: 'inet_interfaces = all'
+    state: present
+
+- name: mydestination to ...
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mydestination\s*='
+    line: 'mydestination = mail.{{ hostname }}.{{ domain_name }}, localhost.{{ hostname }}.{{ domain_name }}, localhost, {{ hostname }}.{{ domain_name }}'
+    state: present
+
+- name: mynetworks_style to host
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mynetworks_style\s*='
+    line: 'mynetworks_style = host'
+    state: present
+
+- name: myorigin = $mydomain in main.cf
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^myorigin\s*='
+    line: 'myorigin = $mydomain'
+    state: present
+
+- name: Add a user named mailuser
+  ansible.builtin.user:
+    name: mailuser
+    password: '$y$j9T$JV.EfSfIsNcCB7hZLY3381$CN/ZjxJknJ9pMSC3ncVE/nwi0w0RexsDXhuzPyuPxL2' #hash of pass
+
+- name: Download Dovecot
+  ansible.builtin.package:
+    name: dovecot
+    state: present
+
+- name: set mail_debug to yes
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-logging.conf
+    regexp: '^mail_debug\s*='
+    line: 'mail_debug = yes'
+    state: present
+
+- name: allow imap protocol
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/dovecot.conf
+    regexp: '^protocols\s*='
+    line: 'protocols = imap lmtp'
+    state: present
+
+- name: auth_mechanisms = plain login
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^auth_mechanisms\s*='
+    line: 'auth_mechanisms = plain login'
+    state: present
+
+- name: auth_username_format = %n
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^auth_username_format\s*='
+    line: 'auth_username_format = %n'
+    state: present
+
+- name: mail_location = maildir:~/mail
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-mail.conf
+    regexp: '^mail_location\s*='
+    line: 'mail_location = maildir:~/mail'
+    state: present
+
+- name: mail_privileged_group = mail
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-mail.conf
+    regexp: '^mail_privileged_group\s*='
+    line: 'mail_privileged_group = mail'
+    state: present
+
+- name: Make sure user dovecot is in group mail
+  ansible.builtin.user:
+    name: dovecot
+    groups: mail
+    append: yes
+    state: present
+
+- name: Add auto-create to mailboxes and add mailbox Spam
+  ansible.builtin.copy:
+    src: 15-mailboxes.conf
+    dest: /etc/dovecot/conf.d/15-mailboxes.conf
+
+- name: enable port 143 on firewalld
+  ansible.builtin.firewalld:
+    port: 143/tcp
+    state: enabled
+    permanent: true
+  become: true
+
+- name: enable port 993 on firewalld
+  ansible.builtin.firewalld:
+    port: 993/tcp
+    state: enabled
+    permanent: true
+  become: true
+
+- name: reload firewalld to apply changes
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  become: true
+
+- name: disable plaintext to no
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-auth.conf
+    regexp: '^disable_plaintext_auth\s*='
+    line: 'disable_plaintext_auth = no'
+    state: present 
+
+- name: ssl to no
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-ssl.conf
+    regexp: '^ssl\s*='
+    line: 'ssl = no'
+    state: present
+
+- name: define lmtp listener in dovecot
+  ansible.builtin.copy:
+    src: 10-master.conf
+    dest: /etc/dovecot/conf.d/10-master.conf
+
+- name: add line mailbox_transport = lmtp:unix:private/dovecot-lmtp to main.cf
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^mailbox_transport\s*='
+    line: 'mailbox_transport = lmtp:unix:private/dovecot-lmtp'
+    state: present
+
+- name: Ensure submission block is in /etc/postfix/master.cf
+  ansible.builtin.copy:
+    src: master.cf
+    dest: /etc/postfix/master.cf
+
+- name: Ensure EPEL and DNF plugins are installed
+  ansible.builtin.dnf:
+    name:
+      - epel-release
+      - dnf-plugins-core
+    state: present
+
+- name: Run dnf update
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: yes
+
+- name: Enable CRB repository
+  ansible.builtin.command:
+    cmd: dnf config-manager --set-enabled crb
+    creates: /etc/yum.repos.d/crb.repo
+
+- name: Install required packages
+  ansible.builtin.dnf:
+    name:
+      - make
+      - ImageMagick
+      - ImageMagick-devel
+      - ImageMagick-perl
+      - pcre-devel
+      - zlib
+      - zlib-devel
+      - libzip
+      - libzip-devel
+      - libmcrypt-devel
+      - php
+      - php-fpm
+      - php-devel
+      - php-pear
+      - php-cli
+      - php-gd
+      - php-curl
+      - php-xml
+      - php-mysqlnd
+      - php-mbstring
+      - php-intl
+      - php-ldap
+      - mariadb
+      - mariadb-server
+      - httpd
+    state: present
+
+- name: Install PHP extensions using pecl
+  ansible.builtin.shell: |
+    pecl install imagick mcrypt zip
+  become: true
+
+- name: Create PHP ini files for pecl extensions
+  ansible.builtin.copy:
+    dest: "/etc/php.d/20-{{ item }}.ini"
+    content: "extension={{ item }}"
+  with_items:
+    - imagick
+    - mcrypt
+    - zip
+
+- name: Ensure httpd service is started and enabled
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: true
+
+- name: Ensure mariadb service is started and enabled
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Ensure php-fpm service is started and enabled
+  ansible.builtin.service:
+    name: php-fpm
+    state: started
+    enabled: true
+
+- name: Create roundcubemail database
+  ansible.builtin.mysql_db:
+    #login_user: root
+    #login_password: pass
+    name: roundcubemail
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Create a new database user
+  ansible.builtin.mysql_user:
+    name: roundcube
+    host: localhost
+    password: QwSAQ4oxDQE6VWE6jiFiFA==
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Grant user roundcube access to roundcubemail database
+  ansible.builtin.mysql_user:
+    name: roundcube
+    host: localhost
+    password: QwSAQ4oxDQE6VWE6jiFiFA==
+    priv: 'roundcubemail.*:ALL'
+    state: present
+    login_user: root
+    login_password: pass
+
+- name: Reload privilege tables
+  ansible.builtin.mysql_query:
+    login_user: root
+    login_password: pass
+    query: "FLUSH PRIVILEGES;"
+    login_host: 'localhost'
+
+- name: Download Roundcube release
+  ansible.builtin.get_url:
+    url: https://github.com/roundcube/roundcubemail/releases/download/1.6.1/roundcubemail-1.6.1-complete.tar.gz
+    dest: /var/www/html/roundcube.tar.gz
+
+- name: Uncompress Roundcube tarball
+  ansible.builtin.unarchive:
+    src: /var/www/html/roundcube.tar.gz
+    dest: /var/www/html/
+    remote_src: yes
+
+- name: Remove the compressed file
+  ansible.builtin.file:
+    path: /var/www/html/roundcube.tar.gz
+    state: absent
+
+- name: Rename the uncompressed directory
+  ansible.builtin.command:
+    cmd: mv /var/www/html/roundcubemail-1.6.1 /var/www/html/roundcubemail
+
+- name: Set correct owner and group for Roundcube directory
+  ansible.builtin.file:
+    path: /var/www/html/roundcubemail
+    owner: apache
+    group: apache
+    state: directory
+    recurse: yes
+
+- name: Set correct SELinux permissions for the directory
+  ansible.builtin.command:
+    cmd: chcon -t httpd_sys_rw_content_t /var/www/html/roundcubemail -R
+
+- name: Ensure Apache can write to the Roundcube directory
+  ansible.builtin.file:
+    path: /var/www/html/roundcubemail
+    mode: '0755'
+    recurse: yes
+
+- name: create a config file called mail.vm.sa.cs.ut.ee.conf
+  ansible.builtin.template:
+    src: mail.vm.sa.cs.ut.ee.conf
+    dest: /etc/httpd/conf.d/mail.{{ hostname }}.{{ domain_name }}.conf

@@ -14,4 +14,5 @@
   roles:
 #    - { role: etais, tags: etais }
 #    - { role: dns, tags: dns }
-    - { role: apache, tags: apache }
+#    - { role: apache, tags: apache }
+    - {role: email, tags: email }
