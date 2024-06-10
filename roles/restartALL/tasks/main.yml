@@ -1,0 +1,41 @@
+---
+#restart everything
+
+- name:
+  ansible.builtin.systemd:
+    name: named
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: httpd
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: postfix
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: php/fpm
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: mariadb
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: dovecot
+    state: restarted
+
+- name:
+  ansible.builtin.systemd:
+    name: sshd.service
+    state: restarted
+
+- name: Reload firewalld to apply changes
+  ansible.builtin.command:
+    cmd: firewall-cmd --reload
