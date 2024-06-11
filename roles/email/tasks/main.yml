@@ -352,5 +352,5 @@
 
 - name: create a config file called mail.vm.sa.cs.ut.ee.conf
   ansible.builtin.template:
-    src: mail.vm.sa.cs.ut.ee.conf
+    src: mail.vm.sa.cs.ut.ee.conf.j2
     dest: /etc/httpd/conf.d/mail.{{ hostname }}.{{ domain_name }}.conf

@@ -1,0 +1,29 @@
+<VirtualHost *:80>
+  ServerAdmin root@{{ hostname }}.{{ domain_name }}
+  ServerName mail.{{ hostname }}.{{ domain_name }}
+  DocumentRoot /var/www/html/roundcubemail
+  <Directory /var/www/html/roundcubemail>
+      Allowoverride all
+  </Directory>
+
+  ErrorLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-error.log
+  CustomLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-access.log combined
+  ForensicLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-forensic.log
+</VirtualHost>
+
+<VirtualHost *:443>
+  SSLEngine on
+  ServerAdmin root@{{ hostname }}.{{ domain_name }}
+  ServerName mail.{{ hostname }}.{{ domain_name }}
+  DocumentRoot /var/www/html/roundcubemail
+  <Directory /var/www/html/roundcubemail>
+      Allowoverride all
+  </Directory>
+
+  ErrorLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-error.log
+  CustomLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-access.log combined
+  ForensicLog /var/log/httpd/mail.{{ hostname }}.{{ domain_name }}-forensic.log
+  SSLCertificateFile /etc/pki/tls/certs/postfix.pem
+  SSLCertificateKeyFile /etc/pki/tls/private/postfix.key
+  SSLCACertificateFile /etc/pki/tls/certs/cacert.crt
+</VirtualHost>

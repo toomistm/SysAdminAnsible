@@ -1,0 +1,128 @@
+---
+- name: enable port 443 for https connections
+  ansible.builtin.firewalld:
+    port: 443/tcp
+    state: enabled
+    permanent: true
+  become: true
+
+- name: copy certs dir
+  ansible.builtin.copy:
+    src: certs/
+    dest: /etc/pki/tls/certs
+
+- name: copy private dir
+  ansible.builtin.copy:
+    src: private/
+    dest: /etc/pki/tls/private
+
+- name: install mod_ssl
+  ansible.builtin.dnf:
+    name: mod_ssl
+    state: present
+
+- name: new virtual host listening on port 443 www
+  ansible.builtin.template:
+    src: www.j2
+    dest: /etc/httpd/conf.d/www.{{ hostname }}.conf
+
+- name: new virtual host listening on port 443 wordpress
+  ansible.builtin.template:
+    src: wordpress.j2
+    dest: /etc/httpd/conf.d/wordpress.{{ hostname }}.conf
+
+- name: new virtual host listening on port 443 proxy
+  ansible.builtin.template:
+    src: proxy.j2
+    dest: /etc/httpd/conf.d/proxy.conf
+
+- name: new virtual host listening on port 443 mail
+  ansible.builtin.template:
+    src: mail.j2
+    dest: /etc/httpd/conf.d/mail.{{ hostname }}.{{ domain_name }}.conf
+
+- name: lines in main.cf
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^smtpd_tls_security_level\s*='
+    line: 'smtpd_tls_security_level = may'
+    state: present
+
+- name: lines in main.cf 2
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^smtpd_tls_cert_file='
+    line: 'smtpd_tls_cert_file=/etc/pki/tls/certs/postfix.pem'
+    state: present
+
+- name: lines in main.cf 3
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^smtpd_tls_key_file='
+    line: 'smtpd_tls_key_file=/etc/pki/tls/private/postfix.key'
+    state: present
+
+- name: lines in main.cf 4
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^smtpd_tls_loglevel\s*='
+    line: 'smtpd_tls_loglevel = 1'
+    state: present
+
+- name: lines in main.cf last
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^smtp_tls_loglevel\s*='
+    line: 'smtp_tls_loglevel = 1'
+    state: present
+
+- name: copy postfix.pem
+  ansible.builtin.copy:
+    src: certs/postfix.pem
+    dest: /etc/pki/tls/certs/
+
+- name: copy postfix.key
+  ansible.builtin.copy:
+    src: private/postfix.key
+    dest: /etc/pki/tls/private/
+
+- name: copy master.cf
+  ansible.builtin.copy:
+    src: master.cf
+    dest: /etc/postfix/master.cf
+
+- name: install cyrus-sasl-plain
+  ansible.builtin.dnf:
+    name: cyrus-sasl-plain
+    state: present
+
+- name: copy dovecot.pem
+  ansible.builtin.copy:
+    src: dovecot2.pem
+    dest: /etc/pki/dovecot/certs/dovecot.pem
+
+- name: copy dovecot.key
+  ansible.builtin.copy:
+    src: dovecot2.key
+    dest: /etc/pki/dovecot/private/dovecot.pem
+
+- name: configure 10-ssl.conf file
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-ssl.conf
+    regexp: '^ssl\s*='
+    line: 'ssl = yes'
+    state: present
+
+- name: configure 10-ssl.conf file 2
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-ssl.conf
+    regexp: '^ssl_cert*='
+    line: 'ssl_cert = </etc/pki/dovecot/certs/dovecot.pem'
+    state: present
+
+- name: configure 10-ssl.conf file last
+  ansible.builtin.lineinfile:
+    path: /etc/dovecot/conf.d/10-ssl.conf
+    regexp: '^ssl_key\s*='
+    line: 'ssl_key = </etc/pki/dovecot/private/dovecot.pem'
+    state: present
