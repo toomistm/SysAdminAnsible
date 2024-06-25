@@ -3,19 +3,24 @@
   user: centos
   become: yes
   vars:
-    hostname: toomistm
-    domain_name: sa.cs.ut.ee
+    hostname: toomistme
+    domain_name: sysadexam.cs.ut.ee
     ipv41: 172
     ipv42: 17
-    ipv43: 88
-    ipv44: 203
+    ipv43: 89
+    ipv44: 176
 # VM ip is 172.17.88.203
-
+# 172.17.89.176
   roles:
+#    - {role: openPort, tags: openPort }
+
 #    - { role: etais, tags: etais }
 #    - { role: dns, tags: dns }
 #    - { role: apache, tags: apache }
-#    - {role: email, tags: email }
-    - {role: tls, tags: tls}
+    - {role: email, tags: email }
+#    - {role: tls, tags: tls}
 
-#    - {role: restartALL, tags: restartALL }
+    - {role: restartALL, tags: restartALL }
+
+### break stuff
+#    - tier3

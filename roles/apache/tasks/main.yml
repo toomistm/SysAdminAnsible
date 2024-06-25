@@ -19,11 +19,6 @@
     permanent: true
     state: enabled
 
-- name: Enable auto-starting the http daeomon on boot
-  systemd:
-    name: httpd
-    state: started
-
 - name: Create www.<vm_name> directory in /var/www/html
   ansible.builtin.file:
     path: /var/www/html/www.{{ hostname }}
@@ -74,11 +69,11 @@
     src: proxy.conf
     dest: /etc/httpd/conf.d/proxy.conf
 
-- name: Enable auto-starting the httpd service on boot
-  systemd:
-    name: httpd
-    state: started
-    enabled: yes
+#- name: Enable auto-starting the httpd service on boot
+#  systemd:
+#    name: httpd
+#    state: started
+#    enabled: yes
 
 - name: Add the user 'proxy'
   ansible.builtin.user:
@@ -96,15 +91,15 @@
     src: proxy.service
     dest: /etc/systemd/system/proxy.service
 
-- name: Reload systemd manager configuration
-  ansible.builtin.systemd:
-    daemon_reload: yes
+#- name: Reload systemd manager configuration
+#  ansible.builtin.systemd:
+#    daemon_reload: yes
 
-- name: Enable auto-starting the proxy service on boot
-  systemd:
-    name: proxy
-    state: started
-    enabled: yes
+#- name: Enable auto-starting the proxy service on boot
+#  systemd:
+#    name: proxy
+#    state: started
+#    enabled: yes
 
 - name: Install packages using dnf
   ansible.builtin.yum:
@@ -138,7 +133,7 @@
     host_all: true
     state: absent
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Disallow root login remotely
   ansible.builtin.mysql_user:
@@ -147,7 +142,7 @@
     priv: '*.*:ALL,GRANT'
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
   ignore_errors: true
 
 - name: Remove test database
@@ -155,12 +150,12 @@
     name: test
     state: absent
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Reload privilege tables
   ansible.builtin.mysql_query:
     login_user: root
-    login_password: pass
+    login_password: parool
     query: "FLUSH PRIVILEGES;"
     login_host: 'localhost'
 
@@ -171,7 +166,7 @@
     name: WordPress
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Create a new database user
   ansible.builtin.mysql_user:
@@ -180,7 +175,7 @@
     password: pass
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Grant user admin access to WordPress database
   ansible.builtin.mysql_user:
@@ -190,12 +185,12 @@
     priv: 'WordPress.*:ALL'
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Reload privilege tables
   ansible.builtin.mysql_query:
     login_user: root
-    login_password: pass
+    login_password: parool
     query: "FLUSH PRIVILEGES;"
     login_host: 'localhost'
 
@@ -210,6 +205,13 @@
     dest: /var/www/html/
     remote_src: yes
 
+- name: Change directory permissions to 755
+  file:
+    path: /var/www/html
+    state: directory
+    recurse: yes
+    mode: '0755'
+
 - name: Change wordpress owner and group to apache
   ansible.builtin.file:
     path: /var/www/html/wordpress
@@ -220,6 +222,19 @@
 - name: Sefcontext | this equates to 'chcon -t httpd_sys_rw_content_t /var/www/html/wordpress -R'
   sefcontext:
     target: '/var/www/html/wordpress(/.*)?'
+    setype: httpd_sys_rw_content_t
+    state: present
+
+- name: Change www.vm owner and group to apache
+  ansible.builtin.file:
+    path: /var/www/html/www.{{ hostname }}
+    owner: apache
+    group: apache
+    recurse: yes
+
+- name: Set SELinux context for www.<hostname>
+  sefcontext:
+    target: '/var/www/html/www.{{ hostname }}(/.*)?'
     setype: httpd_sys_rw_content_t
     state: present
 
@@ -264,10 +279,10 @@
     group: named
     mode: '0640'
 
-- name: Apache reload
-  ansible.builtin.service:
-    name: httpd
-    state: reloaded
+#- name: Apache reload
+#  ansible.builtin.service:
+#    name: httpd
+#    state: reloaded
 
 - name: php-fpm started
   systemd:
@@ -286,10 +301,10 @@
     line: 'LoadModule log_forensic_module modules/mod_log_forensic.so'
     state: present
 
-- name: restart apache
-  systemd:
-    name: httpd
-    state: restarted
+#- name: restart apache
+#  systemd:
+#    name: httpd
+#    state: restarted
 
 
 - name: Search for ModSecurity package
@@ -338,7 +353,7 @@
       # [<SCRIPT] is included in arguments
       SecRule ARGS "<[Ss][Cc][Rr][Ii][Pp][Tt]" "id:'500003'"
 
-- name: Restart Apache to apply changes
-  ansible.builtin.systemd:
-    name: httpd
-    state: restarted
+#- name: Restart Apache to apply changes
+#  ansible.builtin.systemd:
+#    name: httpd
+#    state: restarted

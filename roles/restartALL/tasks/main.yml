@@ -1,39 +1,71 @@
 ---
 #restart everything
 
-- name:
+- name: named
   ansible.builtin.systemd:
     name: named
     state: restarted
 
-- name:
+- name: httpd
   ansible.builtin.systemd:
     name: httpd
     state: restarted
+#
+- name: Enable auto-starting the httpd service on boot
+  systemd:
+    name: httpd
+    state: started
+    enabled: yes
 
-- name:
+- name: Reload systemd manager configuration
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Enable auto-starting the proxy service on boot
+  systemd:
+    name: proxy
+    state: started
+    enabled: yes
+
+- name: postfix
   ansible.builtin.systemd:
     name: postfix
     state: restarted
 
-- name:
+- name: php-fpm
   ansible.builtin.systemd:
-    name: php/fpm
+    name: php-fpm
     state: restarted
 
-- name:
+- name: mariadb
   ansible.builtin.systemd:
     name: mariadb
     state: restarted
 
-- name:
+- name: Enable auto-starting mariadb on boot
+  systemd:
+    name: mariadb
+    state: started
+    enabled: yes
+
+- name: dovecot
   ansible.builtin.systemd:
     name: dovecot
     state: restarted
 
-- name:
+- name: sshd.service
   ansible.builtin.systemd:
     name: sshd.service
+    state: restarted
+
+- name: nfs-server
+  ansible.builtin.systemd:
+    name: nfs-server
+    state: restarted
+
+- name: docker
+  ansible.builtin.systemd:
+    name: docker
     state: restarted
 
 - name: Reload firewalld to apply changes

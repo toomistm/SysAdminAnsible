@@ -1,0 +1,47 @@
+- name: Open ports (tcp)
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+  loop:
+    - 22
+    - 80
+    - 443
+    - 8301
+    - 53
+    - 465
+    - 25
+    - 143
+    - 993
+    - 111
+    - 2049
+    - 139
+    - 445
+    - 5005
+    - 8443
+    - 58080
+    - 8080
+    - 50080
+    - 6443
+    - 32210
+    - 30909
+    - 10250
+    - 30910
+    - 514
+    - 30000
+    - 30310
+  become: true
+
+- name: Open ports (udp)
+  ansible.posix.firewalld:
+    port: "{{ item }}/udp"
+    permanent: true
+    state: enabled
+  loop:
+    - 8301
+    - 53
+    - 587
+    - 465
+    - 25
+  become: true
+

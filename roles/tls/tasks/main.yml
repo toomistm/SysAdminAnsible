@@ -1,4 +1,7 @@
 ---
+- name: pause for downloading certs and keys from vault
+  ansible.builtin.pause:
+
 - name: enable port 443 for https connections
   ansible.builtin.firewalld:
     port: 443/tcp

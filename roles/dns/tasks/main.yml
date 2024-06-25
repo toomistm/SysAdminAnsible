@@ -55,6 +55,7 @@
     owner: named
     group: named
     mode: '0740'
+  become: true
 
 - name: Change the owner and group of log dir recursively
   file:
@@ -62,6 +63,7 @@
     recurse: yes
     owner: named
     group: named
+  become: true
 
 - name: Change the permissions of previous files
   file:
@@ -89,6 +91,12 @@
     owner: root
     group: root
 
+- name: Ensure correct permissions and remove immutable attribute if present
+  ansible.builtin.command:
+    cmd: chattr -i /etc/named/{{ hostname }}.{{ domain_name }}
+  ignore_errors: true
+  become: true
+
 - name: Create hostname.domain_name file in /etc/named dir
   template:
     src: zoneFile.j2
@@ -96,6 +104,8 @@
     owner: root
     group: named
     mode: '0640'
+    force: yes
+  become: true
 
 - name: Add the defined zone into the Bind configuration
   template:
@@ -105,17 +115,18 @@
     group: named
     mode: '0640'
 
-- name: Restart named service
-  systemd:
-    name: named
-    state: restarted
+- name: Ensure correct permissions and remove immutable attribute if present
+  ansible.builtin.command:
+    cmd: chattr -i /etc/named/{{ ipv43 }}.{{ ipv42 }}.{{ ipv41 }}.in-addr.arpa
+  ignore_errors: true
+  become: true
 
 - name: Add reverse zone file
   template:
     src: reverseZoneFile.j2
     dest: /etc/named/{{ ipv43 }}.{{ ipv42 }}.{{ ipv41 }}.in-addr.arpa
 
-- name: Restart named service
+- name: restart named service
   systemd:
     name: named
     state: restarted

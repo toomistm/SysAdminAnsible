@@ -259,11 +259,11 @@
     - mcrypt
     - zip
 
-- name: Ensure httpd service is started and enabled
-  ansible.builtin.service:
-    name: httpd
-    state: started
-    enabled: true
+#- name: Ensure httpd service is started and enabled
+#  ansible.builtin.service:
+#    name: httpd
+#    state: started
+#    enabled: true
 
 - name: Ensure mariadb service is started and enabled
   ansible.builtin.service:
@@ -284,7 +284,7 @@
     name: roundcubemail
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Create a new database user
   ansible.builtin.mysql_user:
@@ -293,7 +293,7 @@
     password: QwSAQ4oxDQE6VWE6jiFiFA==
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Grant user roundcube access to roundcubemail database
   ansible.builtin.mysql_user:
@@ -303,34 +303,45 @@
     priv: 'roundcubemail.*:ALL'
     state: present
     login_user: root
-    login_password: pass
+    login_password: parool
 
 - name: Reload privilege tables
   ansible.builtin.mysql_query:
     login_user: root
-    login_password: pass
+    login_password: parool
     query: "FLUSH PRIVILEGES;"
     login_host: 'localhost'
+
+- name: Check if Roundcube is already installed
+  ansible.builtin.stat:
+    path: /var/www/html/roundcubemail
+  register: roundcube_installed
 
 - name: Download Roundcube release
   ansible.builtin.get_url:
     url: https://github.com/roundcube/roundcubemail/releases/download/1.6.1/roundcubemail-1.6.1-complete.tar.gz
     dest: /var/www/html/roundcube.tar.gz
+  when: not roundcube_installed.stat.exists
 
 - name: Uncompress Roundcube tarball
   ansible.builtin.unarchive:
     src: /var/www/html/roundcube.tar.gz
     dest: /var/www/html/
     remote_src: yes
+  when: not roundcube_installed.stat.exists
 
 - name: Remove the compressed file
   ansible.builtin.file:
     path: /var/www/html/roundcube.tar.gz
     state: absent
+  when: not roundcube_installed.stat.exists
 
 - name: Rename the uncompressed directory
   ansible.builtin.command:
     cmd: mv /var/www/html/roundcubemail-1.6.1 /var/www/html/roundcubemail
+  args:
+    creates: /var/www/html/roundcubemail
+  when: not roundcube_installed.stat.exists
 
 - name: Set correct owner and group for Roundcube directory
   ansible.builtin.file:
@@ -354,3 +365,9 @@
   ansible.builtin.template:
     src: mail.vm.sa.cs.ut.ee.conf.j2
     dest: /etc/httpd/conf.d/mail.{{ hostname }}.{{ domain_name }}.conf
+
+- name: Ensure httpd service is started and enabled
+  ansible.builtin.service:
+    name: httpd
+    state: started
+    enabled: true
